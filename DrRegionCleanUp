@@ -1,0 +1,100 @@
+
+$Name = "ResourceGroupNamePrefix"
+$location = "West Europe"
+$AzureSubscriptionId = "XXXXXXXXXXXXXXXXXXXXXX"
+ 
+#region Service Principle Details
+
+ $UseServicePrincipal = $false
+$TenantId = "XXXXXXXXXXXXXX"
+$ApplicationId = "SERVICE_PRINCIPAL_APPLICATION_ID"
+$ApplicationPassword = "SERVICE_PRINCIPAL_APPLICATION_PASSWORD"
+
+#endregion
+
+  Write-Host "Setting Azure RM Context..."
+	
+	Write-Host "Subscriptionid $AzureSubscriptionId "
+
+ 	if($UseServicePrincipal -eq $true)
+	{
+		#region Use Service Principle
+		$secpasswd = ConvertTo-SecureString $ApplicationPassword -AsPlainText -Force
+		$mycreds = New-Object System.Management.Automation.PSCredential ($ApplicationId, $secpasswd)
+		#Login-AzureRmAccount -ServicePrincipal -Tenant $TenantId -Credential $mycreds		
+		Set-AzureRmContext -SubscriptionID $AzureSubscriptionId -TenantId $TenantId
+		#endregion
+	}
+	else
+	{
+		#region Use Manual Login
+		try 
+		{
+			Write-Host "inside try"
+			Set-AzureRmContext -SubscriptionID $AzureSubscriptionId
+		}
+		catch 
+		{
+			Write-Host "inside catch"
+			Login-AzureRmAccount
+			Set-AzureRmContext -SubscriptionID $AzureSubscriptionId
+		}
+		#endregion		
+	}
+	
+ 	Write-Host "Check if resource group already exists..."
+	$notPresent = Get-AzureRmResourceGroup -Name $Name -ev notPresent -ea 0
+	
+	if (!$notPresent) 
+	{
+		Write-Host "Resource group $Name not present in $location " 
+ 	}
+
+
+#Start the proper clean up JOB!!!!
+ 		 
+		 $CMName =  $Name+ "-cm"
+		 $SiName =  $Name+ "-si"
+		 $MasterDbName =  $Name+ "-master-db"
+		 $SqlDbName =  $Name+ "-sql"
+		 
+		 Write-Host "CM name $CMName"
+		 Write-Host "SI name $SiName"
+		 
+try
+{
+$SiRes =	Get-AzureRmResource -ResourceName $SiName -ResourceGroupName $Name -ResourceType Microsoft.Web/sites
+ 
+		
+	if ($SiRes) 
+	{
+	 Write-Host "SI ID $SiRes.ResourceId"
+
+  Remove-AzureRmResource   -ResourceName $SiName -ResourceGroupName $Name -ResourceType Microsoft.Web/sites
+  }
+ }
+  catch { 	Write-Error $_.Exception.Message
+}
+		 
+try
+{
+$cmRes =	Get-AzureRmResource -ResourceName $CMName -ResourceGroupName $Name -ResourceType Microsoft.Web/sites
+  
+  if ($cmRes) 
+	{ 
+    Remove-AzureRmResource   -ResourceName $CMName -ResourceGroupName $Name -ResourceType Microsoft.Web/sites
+}
+}
+  catch { 	Write-Error $_.Exception.Message
+}
+
+
+  Remove-AzureRmSqlDatabase  -ResourceGroupName  $Name  -DatabaseName $MasterDbName -ServerName $SqlDbName  
+			
+	Write-Host "Deployment Complete."
+}
+catch 
+{
+	Write-Error $_.Exception.Message
+	Break 
+}
